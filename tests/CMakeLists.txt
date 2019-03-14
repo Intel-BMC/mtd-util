@@ -38,10 +38,6 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/sysroot/include)
 
 ###############
-# import Boost D-Bus
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/boost-dbus/include)
-
-###############
 # import Boost
 find_package(Boost REQUIRED COMPONENTS iostreams)
 add_definitions(-DBOOST_ERROR_CODE_HEADER_ONLY)
@@ -57,13 +53,6 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(Crypto crypto)
 include_directories(${Crypto_INCLUDE_DIRS})
 link_directories(${Crypto_LIBRARY_DIRS})
-
-###############
-# import D-Bus
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(DBus dbus-1)
-include_directories(${DBus_INCLUDE_DIRS})
-link_directories(${DBus_LIBRARY_DIRS})
 
 ##############
 # import GTest

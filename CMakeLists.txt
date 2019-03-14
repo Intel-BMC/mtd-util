@@ -47,6 +47,9 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/sysroot/include)
 ###############
 # import Boost
 find_package(Boost REQUIRED COMPONENTS iostreams)
+find_package(Threads)
+
+
 add_definitions(-DBOOST_ERROR_CODE_HEADER_ONLY)
 add_definitions(-DBOOST_SYSTEM_NO_DEPRECATED)
 add_definitions(-DBOOST_ALL_NO_LIB)
@@ -55,10 +58,8 @@ include_directories(${Boost_INCLUDE_DIRS})
 link_directories(${Boost_LIBRARY_DIRS})
 
 add_executable(mtd-util "mtd-util.cpp" "debug.cpp" "mtd.cpp")
-target_link_libraries(mtd-util LINK_INTERFACE_LIBRARIES boost-dbus)
-target_link_libraries(mtd-util ${Boost_LIBRARIES})
-target_link_libraries(mtd-util pthread)
-
+target_link_libraries(mtd-util ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(mtd-util Boost::iostreams)
 
 install (TARGETS mtd-util DESTINATION bin)
 
