@@ -33,7 +33,7 @@
 #include <string>
 #include <vector>
 
-#include "util.h"  // cbspan type
+#include "util.h" // cbspan type
 
 #define BIG_BLOCK_SIZE (64 * 1024)
 #define SMALL_BLOCK_SIZE (4 * 1024)
@@ -44,79 +44,119 @@
 extern int mtd_use_4k_sectors;
 #endif
 
-class hw_mtd {
- protected:
-  size_t _size;
-  int _erase_size;
-  int _is_4k;
-  int _fd;
+class hw_mtd
+{
+  protected:
+    size_t _size;
+    int _erase_size;
+    int _is_4k;
+    int _fd;
 
- public:
-  hw_mtd() : _size(0), _erase_size(0), _is_4k(0), _fd(-1) {}
-  ~hw_mtd() {
-    if (_fd >= 0) ::close(_fd);
-  }
+  public:
+    hw_mtd() : _size(0), _erase_size(0), _is_4k(0), _fd(-1)
+    {
+    }
+    ~hw_mtd()
+    {
+        if (_fd >= 0)
+            ::close(_fd);
+    }
 
-  int open(const std::string &path);
-  void erase(uint32_t addr, size_t len);
-  int write_raw(uint32_t addr, const cbspan &in_buf);
+    int open(const std::string& path);
+    void erase(uint32_t addr, size_t len);
+    int write_raw(uint32_t addr, const cbspan& in_buf);
 
-  int erase_size() const { return _erase_size; }
-  size_t size() const { return _size; }
-  int is_4k() const { return _is_4k; }
+    int erase_size() const
+    {
+        return _erase_size;
+    }
+    size_t size() const
+    {
+        return _size;
+    }
+    int is_4k() const
+    {
+        return _is_4k;
+    }
 };
 
 #define DEFAULT_MTD_EMU_SZ (16 * 1024 * 1024)
-class file_mtd_emulation {
- protected:
-  size_t _size;
-  int _is_4k;
-  int _fd;
+class file_mtd_emulation
+{
+  protected:
+    size_t _size;
+    int _is_4k;
+    int _fd;
 
- public:
+  public:
 #ifdef MTD_EMULATION
-  file_mtd_emulation() : _size(0), _is_4k(mtd_use_4k_sectors), _fd(-1) {}
+    file_mtd_emulation() : _size(0), _is_4k(mtd_use_4k_sectors), _fd(-1)
+    {
+    }
 #else
-  file_mtd_emulation() : _size(0), _is_4k(0), _fd(-1) {}
+    file_mtd_emulation() : _size(0), _is_4k(0), _fd(-1)
+    {
+    }
 #endif
-  ~file_mtd_emulation() {
-    if (_fd >= 0) ::close(_fd);
-  }
+    ~file_mtd_emulation()
+    {
+        if (_fd >= 0)
+            ::close(_fd);
+    }
 
-  int open(const std::string &path);
-  void erase(uint32_t addr, size_t len);
-  int write_raw(uint32_t addr, const cbspan &in_buf);
+    int open(const std::string& path);
+    void erase(uint32_t addr, size_t len);
+    int write_raw(uint32_t addr, const cbspan& in_buf);
 
-  int erase_size() const { return (64 * 1024); }
-  size_t size() const { return _size; }
-  int is_4k() const { return _is_4k; }
+    int erase_size() const
+    {
+        return (64 * 1024);
+    }
+    size_t size() const
+    {
+        return _size;
+    }
+    int is_4k() const
+    {
+        return _is_4k;
+    }
 };
 
 template <typename deviceClassT>
-class mtd {
- protected:
-  deviceClassT _impl;
-  std::string _path;
-  int _fd;
+class mtd
+{
+  protected:
+    deviceClassT _impl;
+    std::string _path;
+    int _fd;
 
- public:
-  typedef std::shared_ptr<mtd> ptr;
-  mtd();
-  ~mtd();
+  public:
+    typedef std::shared_ptr<mtd> ptr;
+    mtd();
+    ~mtd();
 
-  /* after creating, one must call open, which may throw things */
-  void open(const std::string &path);
+    /* after creating, one must call open, which may throw things */
+    void open(const std::string& path);
 
-  /* read into a buffer out_buf.size() bytes */
-  int read(uint32_t addr, std::vector<uint8_t> &out_buf);
-  /* write with an implied erase */
-  int write(uint32_t addr, const cbspan &in_buf);
-  /* write without an erase */
-  int write_raw(uint32_t addr, const cbspan &in_buf);
-  void erase(uint32_t addr, size_t len);
-  size_t erase_size(void) const { return _impl.erase_size(); }
-  size_t size(void) const { return _impl.size(); }
-  size_t is_4k(void) const { return _impl.is_4k(); }
+    /* read into a buffer out_buf.size() bytes */
+    int read(uint32_t addr, std::vector<uint8_t>& out_buf);
+    /* write with an implied erase */
+    int write(uint32_t addr, const cbspan& in_buf);
+    /* write without an erase */
+    int write_raw(uint32_t addr, const cbspan& in_buf);
+    void erase(uint32_t addr, size_t len);
+    size_t erase_size(void) const
+    {
+        return _impl.erase_size();
+    }
+    size_t size(void) const
+    {
+        return _impl.size();
+    }
+    size_t is_4k(void) const
+    {
+        return _impl.is_4k();
+    }
 };
 
 #ifdef MTD_EMULATION
