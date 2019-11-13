@@ -32,6 +32,7 @@
 #include <boost/iostreams/device/mapped_file.hpp>
 #include <cstdint>
 #include <iostream>
+#include <pfr.hpp>
 #include <string>
 #include <vector>
 
@@ -183,18 +184,23 @@ typedef enum
     ACTION_CP_TO_FLASH,
     ACTION_WRITE_TO_FLASH,
     ACTION_DUMP,
+    ACTION_PFR_AUTH,
+    ACTION_PFR_WRITE,
     ACTION_MAX,
 } ACTION;
 
 void usage(void)
 {
     std::cerr
-        << "Usage: mtd-util [ -d <mtd-device> ] e[rase] start +len\n"
-           "       mtd-util [ -d <mtd-device> ] e[rase] start end\n"
-           "       mtd-util [ -d <mtd-device> ] c[p] file offset\n"
-           "       mtd-util [ -d <mtd-device> ] [-f] c[p] offset file len\n"
-           "       mtd-util [ -d <mtd-device> ] w[rite] offset Xx [Xx ...]\n"
-           "       mtd-util [ -d <mtd-device> ] d[ump] offset [len]\n"
+        << "Usage: mtd-util [-v] [-d <mtd-device>] e[rase] start +len\n"
+           "       mtd-util [-v] [-d <mtd-device>] e[rase] start end\n"
+           "       mtd-util [-v] [-d <mtd-device>] c[p] file offset\n"
+           "       mtd-util [-v] [-d <mtd-device>] [-f] c[p] offset file len\n"
+           "       mtd-util [-v] [-d <mtd-device>] w[rite] offset Xx [Xx ...]\n"
+           "       mtd-util [-v] [-d <mtd-device>] d[ump] offset [len]\n"
+           "       mtd-util [-v] [-d <mtd-device>] p[fr] a[uthenticate] file\n"
+           "       mtd-util [-v] [-d <mtd-device>] p[fr] w[rite] file\n"
+           "            * -v for verbose, can be used multiple times\n"
            "            * mtd-device defaults to /dev/mtd0\n"
            "            * all addresses, offsets, and values are in hex\n"
            "            * dump len defaults to 256 bytes\n"
@@ -221,6 +227,7 @@ int main(int argc, char* argv[])
     int optind = 1; /* skip argv[0] */
     int force_overwrite = 0;
     ACTION action = ACTION_NONE;
+    dbg_level verbosity = PRINT_ERROR;
 
     while (optind < argc && argv[optind][0] == '-')
     {
@@ -236,6 +243,10 @@ int main(int argc, char* argv[])
         {
             force_overwrite = 1;
         }
+        else if (argv[optind][1] == 'v')
+        {
+            verbosity = static_cast<dbg_level>(static_cast<int>(verbosity) + 1);
+        }
         optind++;
     }
     if (flash_dev.length() == 0)
@@ -243,6 +254,8 @@ int main(int argc, char* argv[])
 
     if ((optind + 2) > argc)
         usage();
+
+    fw_update_set_dbg_level(verbosity);
 
     if (argv[optind][0] == 'e')
     {
@@ -380,6 +393,24 @@ int main(int argc, char* argv[])
             }
         }
     }
+    else if (argv[optind][0] == 'p')
+    {
+        if ((optind + 2) >= argc)
+        {
+            usage();
+        }
+        optind++;
+        if (argv[optind][0] == 'a')
+        {
+            action = ACTION_PFR_AUTH;
+        }
+        else if (argv[optind][0] == 'w')
+        {
+            action = ACTION_PFR_WRITE;
+        }
+        optind++;
+        filename = argv[optind];
+    }
     else
     {
         usage();
@@ -410,6 +441,12 @@ int main(int argc, char* argv[])
                 break;
             case ACTION_DUMP:
                 ret = dump_flash(dev, start, len);
+                break;
+            case ACTION_PFR_AUTH:
+                ret = pfr_authenticate(filename);
+                break;
+            case ACTION_PFR_WRITE:
+                ret = pfr_write(dev, filename);
                 break;
             default:
                 usage();

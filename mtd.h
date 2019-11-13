@@ -40,20 +40,18 @@
 #define BIG_BLOCK_MASK (BIG_BLOCK_SIZE - 1)
 #define SMALL_BLOCK_MASK (SMALL_BLOCK_SIZE - 1)
 
-#ifdef MTD_EMULATION
-extern int mtd_use_4k_sectors;
-#endif
+static constexpr bool mtd_use_4k_sectors = false;
 
 class hw_mtd
 {
   protected:
     size_t _size;
     int _erase_size;
-    int _is_4k;
+    bool _is_4k;
     int _fd;
 
   public:
-    hw_mtd() : _size(0), _erase_size(0), _is_4k(0), _fd(-1)
+    hw_mtd() : _size(0), _erase_size(0), _is_4k(mtd_use_4k_sectors), _fd(-1)
     {
     }
     ~hw_mtd()
@@ -74,30 +72,24 @@ class hw_mtd
     {
         return _size;
     }
-    int is_4k() const
+    bool is_4k() const
     {
         return _is_4k;
     }
 };
 
-#define DEFAULT_MTD_EMU_SZ (16 * 1024 * 1024)
+#define DEFAULT_MTD_EMU_SZ (128 * 1024 * 1024)
 class file_mtd_emulation
 {
   protected:
     size_t _size;
-    int _is_4k;
+    bool _is_4k;
     int _fd;
 
   public:
-#ifdef MTD_EMULATION
     file_mtd_emulation() : _size(0), _is_4k(mtd_use_4k_sectors), _fd(-1)
     {
     }
-#else
-    file_mtd_emulation() : _size(0), _is_4k(0), _fd(-1)
-    {
-    }
-#endif
     ~file_mtd_emulation()
     {
         if (_fd >= 0)

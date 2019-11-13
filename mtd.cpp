@@ -102,9 +102,9 @@ int file_mtd_emulation::open(const std::string& path)
 
     _fd = ::open(path.c_str(), O_RDWR | O_CREAT,
                  S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-    if (_fd < 0)
+    if (_fd < 0 || fstat(_fd, &sb) < 0)
         THROW(FileIOError() << boost::errinfo_errno(errno));
-    if (fstat(_fd, &sb) < 0)
+    if (sb.st_size == 0)
     {
         // truncate to a default size
         if (ftruncate(_fd, DEFAULT_MTD_EMU_SZ) < 0)
@@ -353,7 +353,6 @@ void mtd<deviceClassT>::erase(uint32_t addr, size_t len)
 }
 
 #ifdef MTD_EMULATION
-int mtd_use_4k_sectors = 0;
 
 /* forward declarations of templated types */
 template mtd<file_mtd_emulation>::mtd();
