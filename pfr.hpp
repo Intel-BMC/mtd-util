@@ -171,7 +171,8 @@ bool pfr_authenticate(const std::string& filename)
 }
 
 template <typename deviceClassT>
-bool pfr_write(mtd<deviceClassT>& dev, const std::string& filename)
+bool pfr_write(mtd<deviceClassT>& dev, const std::string& filename,
+               bool recovery_reset)
 {
     if (!pfr_authenticate(filename))
     {
@@ -181,8 +182,28 @@ bool pfr_write(mtd<deviceClassT>& dev, const std::string& filename)
                                        boost::iostreams::mapped_file::readonly);
     auto map_base = reinterpret_cast<const uint8_t*>(file.const_data());
     auto offset = reinterpret_cast<const uint8_t*>(file.const_data());
+    auto img_size = reinterpret_cast<const uint32_t>(file.size());
+
     FWDEBUG("file mapped " << file.size() << " bytes at 0x" << std::hex
                            << reinterpret_cast<unsigned long>(offset));
+
+    /* if its non-PFR to PFR migration/factory reset then
+     * we also have to erase static regions and to flash the recovery region
+     * with compressed image.
+     */
+    if (recovery_reset)
+    {
+        constexpr uint32_t rc_img_addr = 0x2a00000;
+        constexpr uint32_t rc_img_size = 0x2000000;
+        cbspan rc_img_data(offset, offset + img_size);
+        // erase static regions before writing.
+        dev.erase(0x0, 0x80000);             // u-boot - 512K
+        dev.erase(0xb00000, 0x1f00000);      // fitImage - 31MB
+        dev.erase(rc_img_addr, rc_img_size); // recovery - 32MB
+        // write compressed image to recovery region
+        dev.write_raw(rc_img_addr, rc_img_data);
+    }
+
     // walk the bitmap, erase and copy
     offset += blk0blk1_size * 2; // one blk0blk1 for package, one for pfm
     auto pfm_hdr = reinterpret_cast<const pfm*>(offset);
@@ -283,7 +304,7 @@ bool pfr_write(mtd<deviceClassT>& dev, const std::string& filename)
                     break;
                 }
             }
-            if (region_is_unsigned)
+            if (region_is_unsigned && !recovery_reset)
             {
                 FWDEBUG("skipping erase on unsigned block"
                         << (er_count == 16 ? "s" : "") << " @" << std::hex

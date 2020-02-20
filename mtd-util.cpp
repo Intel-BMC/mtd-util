@@ -199,7 +199,9 @@ void usage(void)
            "       mtd-util [-v] [-d <mtd-device>] w[rite] offset Xx [Xx ...]\n"
            "       mtd-util [-v] [-d <mtd-device>] d[ump] offset [len]\n"
            "       mtd-util [-v] [-d <mtd-device>] p[fr] a[uthenticate] file\n"
-           "       mtd-util [-v] [-d <mtd-device>] p[fr] w[rite] file\n"
+           "       mtd-util [-v] [-d <mtd-device>] [-r] p[fr] w[rite] file\n"
+           "            * for ease of use, commands can be abbreviated\n"
+           "              to the first letter of the command: c, d, p, etc.\n"
            "            * -v for verbose, can be used multiple times\n"
            "            * mtd-device defaults to /dev/mtd0\n"
            "            * all addresses, offsets, and values are in hex\n"
@@ -207,7 +209,8 @@ void usage(void)
            "            * cp to flash does read/erase/cp/write to preserve "
            "flash\n"
            "            * erase rounds to nearest 4kB boundaries\n"
-           "            * -f allows a forced overwrite of an existing file\n";
+           "            * -f allows a forced overwrite of an existing file\n"
+           "            * -r reset erase-only regions for PFR write\n";
     exit(1);
 }
 
@@ -218,14 +221,15 @@ const std::string backup_device("backup");
 int main(int argc, char* argv[])
 {
     struct stat sb;
-    size_t start, len;
+    size_t start = 0, len = 0;
     int ret = 0;
     uint8_t* buf = NULL;
     char* endptr;
     std::string flash_dev;
     std::string filename;
     int optind = 1; /* skip argv[0] */
-    int force_overwrite = 0;
+    bool force_overwrite = false;
+    bool recovery_reset = false;
     ACTION action = ACTION_NONE;
     dbg_level verbosity = PRINT_ERROR;
 
@@ -241,7 +245,11 @@ int main(int argc, char* argv[])
         }
         else if (argv[optind][1] == 'f')
         {
-            force_overwrite = 1;
+            force_overwrite = true;
+        }
+        else if (argv[optind][1] == 'r')
+        {
+            recovery_reset = true;
         }
         else if (argv[optind][1] == 'v')
         {
@@ -443,10 +451,10 @@ int main(int argc, char* argv[])
                 ret = dump_flash(dev, start, len);
                 break;
             case ACTION_PFR_AUTH:
-                ret = pfr_authenticate(filename);
+                ret = !pfr_authenticate(filename);
                 break;
             case ACTION_PFR_WRITE:
-                ret = pfr_write(dev, filename);
+                ret = !pfr_write(dev, filename, recovery_reset);
                 break;
             default:
                 usage();
