@@ -33,9 +33,18 @@ cmake_minimum_required(VERSION 3.2)
 
 ###############
 # build mtd emulation version
-if ("${MTD_EMULATION}" STREQUAL "1")
+option(MTD_EMULATION "Enable MTD Emulation" OFF)
+if (MTD_EMULATION)
     message(STATUS "Enabling MTD Emulation")
     add_definitions(-DMTD_EMULATION=1)
+endif()
+
+###############
+# Developer Options (raw erase/write/cp commands)
+option(DEVELOPER_OPTIONS "Enable developer options" OFF)
+if (DEVELOPER_OPTIONS)
+    message(STATUS "Enabling developer options")
+    add_definitions(-DDEVELOPER_OPTIONS=1)
 endif()
 
 ###############
