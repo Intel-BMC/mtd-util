@@ -185,6 +185,7 @@ typedef enum
     ACTION_WRITE_TO_FLASH,
     ACTION_DUMP,
     ACTION_PFR_AUTH,
+    ACTION_PFR_STAGE,
     ACTION_PFR_WRITE,
     ACTION_MAX,
 } ACTION;
@@ -199,7 +200,10 @@ void usage(void)
            "       mtd-util [-v] [-d <mtd-device>] w[rite] offset Xx [Xx ...]\n"
            "       mtd-util [-v] [-d <mtd-device>] d[ump] offset [len]\n"
            "       mtd-util [-v] [-d <mtd-device>] p[fr] a[uthenticate] file\n"
-           "       mtd-util [-v] [-d <mtd-device>] [-r] p[fr] w[rite] file\n"
+           "       mtd-util [-v] [-d <mtd-device>] p[fr] s[tage] file "
+           "[offset]\n"
+           "       mtd-util [-v] [-d <mtd-device>] [-r] p[fr] w[rite] file "
+           "[offset]\n"
            "            * for ease of use, commands can be abbreviated\n"
            "              to the first letter of the command: c, d, p, etc.\n"
            "            * -v for verbose, can be used multiple times\n"
@@ -412,12 +416,21 @@ int main(int argc, char* argv[])
         {
             action = ACTION_PFR_AUTH;
         }
+        else if (argv[optind][0] == 's')
+        {
+            action = ACTION_PFR_STAGE;
+        }
         else if (argv[optind][0] == 'w')
         {
             action = ACTION_PFR_WRITE;
         }
         optind++;
         filename = argv[optind];
+        if ((optind + 1) < argc)
+        {
+            optind++;
+            start = strtoul(argv[optind], &endptr, 16);
+        }
     }
     else
     {
@@ -453,8 +466,11 @@ int main(int argc, char* argv[])
             case ACTION_PFR_AUTH:
                 ret = !pfr_authenticate(filename);
                 break;
+            case ACTION_PFR_STAGE:
+                ret = !pfr_stage(dev, filename, start);
+                break;
             case ACTION_PFR_WRITE:
-                ret = !pfr_write(dev, filename, recovery_reset);
+                ret = !pfr_write(dev, filename, start, recovery_reset);
                 break;
             default:
                 usage();

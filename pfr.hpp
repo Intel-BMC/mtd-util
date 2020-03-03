@@ -171,8 +171,28 @@ bool pfr_authenticate(const std::string& filename)
 }
 
 template <typename deviceClassT>
+bool pfr_stage(mtd<deviceClassT>& dev, const std::string& filename,
+               size_t offset)
+{
+    if (!pfr_authenticate(filename))
+    {
+        return false;
+    }
+    boost::iostreams::mapped_file file(filename,
+                                       boost::iostreams::mapped_file::readonly);
+    auto map_base = reinterpret_cast<const uint8_t*>(file.const_data());
+    size_t img_size = file.size();
+
+    dev.erase(offset, img_size);
+
+    cbspan rc_img_data(map_base, map_base + img_size);
+    dev.write_raw(offset, rc_img_data);
+    return true;
+}
+
+template <typename deviceClassT>
 bool pfr_write(mtd<deviceClassT>& dev, const std::string& filename,
-               bool recovery_reset)
+               size_t dev_offset, bool recovery_reset)
 {
     if (!pfr_authenticate(filename))
     {
@@ -182,27 +202,9 @@ bool pfr_write(mtd<deviceClassT>& dev, const std::string& filename,
                                        boost::iostreams::mapped_file::readonly);
     auto map_base = reinterpret_cast<const uint8_t*>(file.const_data());
     auto offset = reinterpret_cast<const uint8_t*>(file.const_data());
-    auto img_size = reinterpret_cast<const uint32_t>(file.size());
 
     FWDEBUG("file mapped " << file.size() << " bytes at 0x" << std::hex
                            << reinterpret_cast<unsigned long>(offset));
-
-    /* if its non-PFR to PFR migration/factory reset then
-     * we also have to erase static regions and to flash the recovery region
-     * with compressed image.
-     */
-    if (recovery_reset)
-    {
-        constexpr uint32_t rc_img_addr = 0x2a00000;
-        constexpr uint32_t rc_img_size = 0x2000000;
-        cbspan rc_img_data(offset, offset + img_size);
-        // erase static regions before writing.
-        dev.erase(0x0, 0x80000);             // u-boot - 512K
-        dev.erase(0xb00000, 0x1f00000);      // fitImage - 31MB
-        dev.erase(rc_img_addr, rc_img_size); // recovery - 32MB
-        // write compressed image to recovery region
-        dev.write_raw(rc_img_addr, rc_img_data);
-    }
 
     // walk the bitmap, erase and copy
     offset += blk0blk1_size * 2; // one blk0blk1 for package, one for pfm
@@ -229,8 +231,8 @@ bool pfr_write(mtd<deviceClassT>& dev, const std::string& filename,
     // copy the pfm manually (not part of the compression bitmap)
     constexpr size_t pfm_address = 0x80000;
     constexpr size_t pfm_region_size = 0x20000;
-    dev.erase(pfm_address, pfm_region_size);
-    dev.write_raw(pfm_address, pfm_data);
+    dev.erase(pfm_address + dev_offset, pfm_region_size);
+    dev.write_raw(pfm_address + dev_offset, pfm_data);
     // set offset to the beginning of the compressed data
     offset += pbc_hdr->bitmap_size / 8;
     uint32_t wr_count = 1;
@@ -308,7 +310,7 @@ bool pfr_write(mtd<deviceClassT>& dev, const std::string& filename,
             {
                 FWDEBUG("skipping erase on unsigned block"
                         << (er_count == 16 ? "s" : "") << " @" << std::hex
-                        << pfr_blk_size * blk);
+                        << pfr_blk_size * blk + dev_offset);
                 continue;
             }
         }
@@ -321,8 +323,8 @@ bool pfr_write(mtd<deviceClassT>& dev, const std::string& filename,
                 er_count = 16;
             }
             FWDEBUG("erase(" << std::hex << pfr_blk_size * blk << ", "
-                             << pfr_blk_size * er_count << ")");
-            dev.erase(pfr_blk_size * blk, pfr_blk_size * er_count);
+                             << pfr_blk_size * er_count + dev_offset << ")");
+            dev.erase(pfr_blk_size * blk + dev_offset, pfr_blk_size * er_count);
         }
 
         if (copy)
@@ -331,8 +333,8 @@ bool pfr_write(mtd<deviceClassT>& dev, const std::string& filename,
             // DUMP(PRINT_ERROR, data);
             FWDEBUG("write(" << std::hex << pfr_blk_size * blk << ", "
                              << pfr_blk_size * wr_count << "), offset = 0x"
-                             << (offset - map_base));
-            dev.write_raw(pfr_blk_size * blk, data);
+                             << (offset - map_base) + dev_offset);
+            dev.write_raw(pfr_blk_size * blk + dev_offset, data);
 
             offset += pfr_blk_size * wr_count;
         }
