@@ -57,7 +57,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/sysroot/include)
 # import Boost
 find_package(Boost REQUIRED COMPONENTS iostreams)
 find_package(Threads)
-
+find_package(OpenSSL REQUIRED)
 
 add_definitions(-DBOOST_ERROR_CODE_HEADER_ONLY)
 add_definitions(-DBOOST_SYSTEM_NO_DEPRECATED)
@@ -66,9 +66,10 @@ find_package(Boost REQUIRED COMPONENTS iostreams)
 include_directories(${Boost_INCLUDE_DIRS})
 link_directories(${Boost_LIBRARY_DIRS})
 
-add_executable(mtd-util "mtd-util.cpp" "debug.cpp" "mtd.cpp")
+add_executable(mtd-util "mtd-util.cpp" "debug.cpp" "mtd.cpp" "pfr.cpp")
 target_link_libraries(mtd-util ${CMAKE_THREAD_LIBS_INIT})
 target_link_libraries(mtd-util Boost::iostreams)
+target_link_libraries(mtd-util OpenSSL::Crypto)
 
 install (TARGETS mtd-util DESTINATION bin)
 

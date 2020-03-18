@@ -64,14 +64,14 @@ include_directories(${GTEST_INCLUDE_DIRS})
 enable_testing()
 
 # mtd-tests
-add_executable(mtd-tests "mtd-tests.cpp" "../debug.cpp" "../mtd.cpp")
+add_executable(mtd-tests "mtd-tests.cpp" "../debug.cpp" "../mtd.cpp" "../pfr.cpp")
 target_link_libraries(mtd-tests Boost::iostreams)
 target_link_libraries(mtd-tests ${GTEST_BOTH_LIBRARIES} gmock)
 target_link_libraries(mtd-tests pthread)
 add_test(mtd-tests mtd-tests "--gtest_output=xml:${test_name}.xml")
 
 # mtd-util-tests
-add_executable(mtd-util-tests "mtd-util-tests.cpp" "../debug.cpp" "../mtd.cpp")
+add_executable(mtd-util-tests "mtd-util-tests.cpp" "../debug.cpp" "../mtd.cpp" "../pfr.cpp")
 target_link_libraries(mtd-util-tests Boost::iostreams)
 target_link_libraries(mtd-util-tests ${GTEST_BOTH_LIBRARIES} gmock)
 target_link_libraries(mtd-util-tests pthread)

@@ -25,45 +25,105 @@
  * Abstract: PFR image capabilities
  */
 
-#include <string.h>
-#include <sys/stat.h>
-#include <sys/types.h>
+#pragma once
 
 #include <boost/iostreams/device/mapped_file.hpp>
 #include <cstdint>
 #include <filesystem>
 #include <iostream>
 #include <string>
-#include <vector>
 
 #include "debug.h"
 #include "exceptions.h"
 #include "mtd.h"
 
-static constexpr size_t pfr_blk_size = 0x1000; /* 4k block size */
-static constexpr uint32_t blk0_magic = 0xb6eafd19;
+constexpr uint32_t pfr_pc_type_cpld_update = 0x00;
+constexpr uint32_t pfr_pc_type_pch_pfm = 0x01;
+constexpr uint32_t pfr_pc_type_pch_update = 0x02;
+constexpr uint32_t pfr_pc_type_bmc_pfm = 0x03;
+constexpr uint32_t pfr_pc_type_bmc_update = 0x04;
+constexpr uint32_t pfr_pc_type_cancel_cert = 0x100;
+
+constexpr uint32_t key_non_cancellable = static_cast<uint32_t>(-1);
+constexpr uint32_t pfr_perm_sign_all = static_cast<uint32_t>(-1);
+constexpr uint32_t pfr_perm_sign_pch_pfm = 0x01;
+constexpr uint32_t pfr_perm_sign_pch_update = 0x02;
+constexpr uint32_t pfr_perm_sign_bmc_pfm = 0x04;
+constexpr uint32_t pfr_perm_sign_bmc_update = 0x08;
+constexpr uint32_t pfr_perm_sign_cpld_update = 0x10;
+
+constexpr size_t pfr_blk_size = 0x1000;
+constexpr size_t pfr_cpld_update_size = 1 * 1024 * 1024; // 1 MB
+constexpr size_t pfr_pch_max_size = 24 * 1024 * 1024;    // 24 MB
+constexpr size_t pfr_bmc_max_size = 32 * 1024 * 1024;    // 32 MB
+constexpr size_t pfr_cancel_cert_size = 8;
+constexpr uint32_t pfr_max_key_id = 127;
+
+constexpr uint32_t curve_secp256r1 = 0xc7b88c74;
+constexpr uint32_t curve_secp384r1 = 0x08f07b47;
+constexpr uint32_t sig_magic_secp256r1 = 0xde64437d;
+constexpr uint32_t sig_magic_secp384r1 = 0xea2a50e9;
+
+/*		0B
+ *		<------+--------------------------------------+
+ *		       |                                      |
+ *		       |           Block0 (128B)              |
+ *		       |                                      |
+ *		       | Contains generic description of      |
+ *		       | protected content (type, size) and   |
+ *		       | SHA256 hash of protected content     |
+ *		       |                                      |
+ *		       |                                      |
+ *		128B   |                                      |
+ *		<---------------------------------+-----------+
+ *		       |                          |           |
+ *		       |           Block1 (896B)  |  Root Key |
+ *		       |                          |           |
+ *		       | Contains signature chain +-----------+
+ *		       | (root key, code signing  |           |
+ *		       | key, block0 signature)   |    CSK    |
+ *		       | used for authentication  |           |
+ *		       | of Block0                +-----------+
+ *		       |                          |           |
+ *		       |                          |   Block0  |
+ *		1024B  |                          | Signature |
+ *		<---------------------------------+-----------+
+ *		       |                                      |
+ *		       |     Protected Content (PC size)      |
+ *		       |                                      |
+ *		       |                                      |
+ *		       |                                      |
+ *		       |                                      |
+ *		       |                                      |
+ *		       |                                      |
+ *		       |                                      |
+ *		       |                                      |
+ *		       |                                      |
+ *		       |                                      |
+ *		       |                                      |
+ *	    PC size +  |                                      |
+ *	    1024B +    |                                      |
+ *	    padding 64B|                                      |
+ *              <------+--------------------------------------+
+ */
+
+constexpr size_t blk0_size = 128;
+constexpr uint32_t blk0_magic = 0xb6eafd19;
+constexpr size_t blk0_pad_size = 32;
 struct blk0
 {
     uint32_t magic;
     uint32_t pc_length;
     uint32_t pc_type;
-    uint32_t rsvd1;
+    uint32_t rsvd;
     uint8_t sha256[32];
     uint8_t sha384[48];
-    uint8_t pad[32];
+    uint8_t pad[blk0_pad_size];
 } __attribute__((packed));
+static_assert(sizeof(blk0) == 128, "blk0 size is not 128 bytes");
 
-static constexpr uint32_t blk1_magic = 0xf27f28d7;
-struct blk1
-{
-    uint32_t magic;
-    uint32_t rsvd[3];
-    uint8_t data[880]; /* signature chain (length varies, but extended with
-                          padding so blk0+blk1 is 1024 bytes) */
-} __attribute__((packed));
-static constexpr size_t blk0blk1_size = sizeof(blk0) + sizeof(blk1);
-
-static constexpr uint32_t root_key_magic = 0xa747a046;
+constexpr uint32_t root_key_magic = 0xa757a046;
+constexpr size_t key_entry_rsvd_size = 5;
 struct key_entry
 {
     uint32_t magic;
@@ -72,31 +132,96 @@ struct key_entry
     uint32_t key_id;
     uint8_t key_x[48];
     uint8_t key_y[48];
-    uint8_t resvd[20];
+    uint32_t rsvd[key_entry_rsvd_size];
 } __attribute__((packed));
+static_assert(sizeof(key_entry) == 132, "key_entry is not 132 bytes");
+static constexpr size_t block1_csk_entry_hash_region_size =
+    (sizeof(key_entry) - sizeof(uint32_t));
 
-static constexpr uint32_t csk_key_magic = 0x14711c2f;
-static constexpr uint32_t curve_secp256r1 = 0xc7b88c74;
-static constexpr uint32_t curve_secp384r1 = 0x08f07b47;
-static constexpr uint32_t sig_magic_secp256r1 = 0xde64437d;
-static constexpr uint32_t sig_magic_secp384r1 = 0xea2a50e9;
+constexpr uint32_t csk_key_magic = 0x14711c2f;
 struct csk_entry
 {
-    key_entry csk;
+    key_entry key;
     uint32_t sig_magic;
     uint8_t sig_r[48];
     uint8_t sig_s[48];
 } __attribute__((packed));
+static_assert(sizeof(csk_entry) == 232, "csk_entry is not 232 bytes");
 
-static constexpr uint32_t pfm_magic = 0x02b3ce1d;
-static constexpr size_t pfm_block_size = 128;
+constexpr uint32_t block0_sig_entry_magic = 0x15364367;
+struct block0_sig_entry
+{
+    uint32_t magic;
+    uint32_t sig_magic;
+    uint8_t sig_r[48];
+    uint8_t sig_s[48];
+};
+
+constexpr size_t blk0blk1_size = 1024;
+constexpr uint32_t blk1_magic = 0xf27f28d7;
+constexpr size_t blk1_pad_size =
+    (blk0blk1_size - sizeof(blk0) - sizeof(uint32_t) * 4 - sizeof(key_entry) -
+     sizeof(csk_entry) - sizeof(block0_sig_entry)) /
+    sizeof(uint32_t);
+struct blk1
+{
+    uint32_t magic;
+    uint32_t pad[3];
+    key_entry root_key;
+    csk_entry csk;
+    block0_sig_entry block0_sig;
+    uint32_t rsvd[blk1_pad_size];
+} __attribute__((packed));
+
+struct b0b1_signature
+{
+    blk0 b0;
+    blk1 b1;
+} __attribute__((packed));
+static_assert(sizeof(b0b1_signature) == 1024,
+              "block0 + block1 size is not 1024 bytes");
+
+constexpr size_t cancel_pad_size = 9;
+struct cancel_cert
+{
+    uint32_t magic;
+    uint32_t pc_length;
+    uint32_t pc_type;
+    uint8_t sha256[32];
+    uint8_t sha384[48];
+    uint32_t rsvd[cancel_pad_size];
+} __attribute__((packed));
+
+constexpr size_t cancel_sig_pad_size =
+    (blk0blk1_size - sizeof(cancel_cert) - sizeof(uint32_t) -
+     sizeof(key_entry) - sizeof(block0_sig_entry)) /
+    sizeof(uint32_t);
+struct cancel_sig
+{
+    uint32_t magic;
+    key_entry root_key;
+    block0_sig_entry block0_sig;
+    uint32_t rsvd[cancel_sig_pad_size];
+} __attribute__((packed));
+static_assert(sizeof(cancel_cert) + sizeof(cancel_sig) == blk0blk1_size,
+              "cancel blk0blk1 size is not 1024 bytes");
+
+constexpr size_t cancel_payload_pad_size = 31;
+struct cancel_payload
+{
+    uint32_t csk_id;
+    uint32_t padding[cancel_payload_pad_size];
+} __attribute__((packed));
+
+constexpr uint32_t pfm_magic = 0x02b3ce1d;
+constexpr size_t pfm_block_size = 128;
 struct pfm
 {
     uint32_t magic;
     uint8_t svn;
     uint8_t bkc;
     uint16_t pfm_revision;
-    uint32_t resvd;
+    uint32_t rsvd;
     uint8_t oem_data[16];
     uint32_t length;
     // pfm_data
@@ -108,30 +233,30 @@ struct spi_region
     uint8_t type;
     uint8_t mask;
     uint16_t hash_info;
-    uint32_t resvd;
+    uint32_t rsvd;
     uint32_t start;
     uint32_t end;
     // hash 1 if present
     // hash 2 if present
 } __attribute__((packed));
-static constexpr uint8_t sha256_present = 0x01;
-static constexpr uint8_t sha384_present = 0x02;
-static constexpr size_t sha256_size = (256 / 8);
-static constexpr size_t sha384_size = (384 / 8);
+constexpr uint8_t sha256_present = 0x01;
+constexpr uint8_t sha384_present = 0x02;
+constexpr size_t sha256_size = (256 / 8);
+constexpr size_t sha384_size = (384 / 8);
 
 struct smbus_rule
 {
     uint8_t type;
-    uint32_t resvd;
+    uint32_t rsvd;
     uint8_t bus;
     uint8_t rule;
     uint8_t addr;
     uint8_t whitelist[32];
 } __attribute__((packed));
-static constexpr uint8_t type_spi_region = 1;
-static constexpr uint8_t type_smbus_rule = 2;
+constexpr uint8_t type_spi_region = 1;
+constexpr uint8_t type_smbus_rule = 2;
 
-static constexpr uint32_t pbc_magic = 0x5f404243;
+constexpr uint32_t pbc_magic = 0x5f404243;
 struct pbc
 {
     uint32_t magic;
@@ -141,40 +266,19 @@ struct pbc
     uint32_t pattern;
     uint32_t bitmap_size;
     uint32_t payload_length;
-    uint8_t resvd[100];
+    uint8_t rsvd[100];
     // active
     // compression
     // payload
 } __attribute__((packed));
 
-bool pfr_authenticate(const std::string& filename)
-{
-    boost::iostreams::mapped_file file(filename,
-                                       boost::iostreams::mapped_file::readonly);
-    const auto blk0_header = reinterpret_cast<const blk0*>(file.const_data());
-    // check for basic shape
-    if (file.size() < blk0blk1_size ||
-        (blk0_header->pc_length + blk0blk1_size) != file.size())
-    {
-        FWERROR("bad file size");
-        return false;
-    }
-    // check blk0 magic
-    if (blk0_header->magic != blk0_magic)
-    {
-        FWERROR("bad blk0 magic");
-        return false;
-    }
-    // check pc_length/pc_type
-    // calculate image hash (save for later when decrypting signature)
-    return true;
-}
+bool pfr_authenticate(const std::string& filename, bool check_root_key);
 
 template <typename deviceClassT>
 bool pfr_stage(mtd<deviceClassT>& dev, const std::string& filename,
                size_t offset)
 {
-    if (!pfr_authenticate(filename))
+    if (!pfr_authenticate(filename, true))
     {
         return false;
     }
@@ -194,7 +298,7 @@ template <typename deviceClassT>
 bool pfr_write(mtd<deviceClassT>& dev, const std::string& filename,
                size_t dev_offset, bool recovery_reset)
 {
-    if (!pfr_authenticate(filename))
+    if (!pfr_authenticate(filename, !recovery_reset))
     {
         return false;
     }

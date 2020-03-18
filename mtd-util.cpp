@@ -25,6 +25,8 @@
  * Abstract: MTD utility application
  */
 
+#include "pfr.hpp"
+
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -32,7 +34,6 @@
 #include <boost/iostreams/device/mapped_file.hpp>
 #include <cstdint>
 #include <iostream>
-#include <pfr.hpp>
 #include <string>
 #include <vector>
 
@@ -482,7 +483,7 @@ int main(int argc, char* argv[])
                 ret = dump_flash(dev, start, len);
                 break;
             case ACTION_PFR_AUTH:
-                ret = !pfr_authenticate(filename);
+                ret = !pfr_authenticate(filename, !recovery_reset);
                 break;
             case ACTION_PFR_STAGE:
                 ret = !pfr_stage(dev, filename, start);
