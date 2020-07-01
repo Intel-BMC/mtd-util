@@ -42,6 +42,7 @@ constexpr uint32_t pfr_pc_type_pch_pfm = 0x01;
 constexpr uint32_t pfr_pc_type_pch_update = 0x02;
 constexpr uint32_t pfr_pc_type_bmc_pfm = 0x03;
 constexpr uint32_t pfr_pc_type_bmc_update = 0x04;
+constexpr uint32_t pfr_pc_type_partial_update = 0x05;
 constexpr uint32_t pfr_pc_type_afm_update = 0x06;
 constexpr uint32_t pfr_pc_type_cancel_cert = 0x100;
 constexpr uint32_t pfr_pc_type_pfr_decommission = 0x200;

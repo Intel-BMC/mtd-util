@@ -413,6 +413,8 @@ static inline uint32_t get_required_perm(uint32_t pc_type)
             return pfr_perm_sign_bmc_pfm;
         case pfr_pc_type_bmc_update:
             return pfr_perm_sign_bmc_update;
+        case pfr_pc_type_partial_update:
+            return pfr_perm_sign_pch_pfm | pfr_perm_sign_pch_update;
         case pfr_pc_type_afm_update:
             return pfr_perm_sign_afm_update;
         case pfr_pc_type_cancel_cert:
@@ -420,6 +422,7 @@ static inline uint32_t get_required_perm(uint32_t pc_type)
         case pfr_pc_type_pfr_decommission:
             return pfr_perm_sign_cpld_update;
         default:
+            FWERROR("bad pc_type: " << pc_type);
             return 0;
     }
 }
@@ -680,5 +683,6 @@ bool pfr_authenticate(const std::string& filename, bool check_root_key)
         FWERROR("bad file size");
         return false;
     }
+
     return is_signature_valid(sig, check_root_key);
 }
