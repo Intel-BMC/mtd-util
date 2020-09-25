@@ -227,11 +227,11 @@ static bool is_block0_valid(const blk0* b0, const uint8_t* protected_content)
     uint32_t pc_type = b0->pc_type;
     if (pc_type == pfr_pc_type_cpld_update)
     {
-        // The PC length of a CPLD update capsule must match the expected size.
+        // The PC length of a CPLD update capsule should not exceed 1MB.
         // A valid signed CPLD update capsule for a larger device may be sent to
         // a smaller CPLD device for update. That can potentially corrupt the
         // recovery image.
-        if (b0->pc_length != pfr_cpld_update_size)
+        if (b0->pc_length > pfr_cpld_update_size)
         {
             FWERROR("cpld image wrong size");
             return false;
