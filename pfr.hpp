@@ -57,6 +57,7 @@ constexpr uint32_t pfr_perm_sign_cpld_update = 0x10;
 constexpr uint32_t pfr_perm_sign_afm_update = 0x20;
 
 constexpr size_t pfr_blk_size = 0x1000;
+constexpr size_t pfr_pfm_max_size = 64 * 1024;           // 64 kB
 constexpr size_t pfr_cpld_update_size = 1 * 1024 * 1024; // 1 MB
 constexpr size_t pfr_pch_max_size = 24 * 1024 * 1024;    // 24 MB
 constexpr size_t pfr_bmc_max_size = 32 * 1024 * 1024;    // 32 MB
@@ -246,6 +247,22 @@ struct afm
     // padding to 128-byte boundary
 } __attribute__((packed));
 
+constexpr uint32_t fvm_magic = 0xa8e7c2d4;
+constexpr size_t fvm_block_size = 128;
+struct fvm
+{
+    uint32_t magic;
+    uint8_t svn;
+    uint8_t rsvd1;
+    uint16_t fvm_revision;
+    uint16_t rsvd2;
+    uint16_t fv_type;
+    uint8_t oem_data[16];
+    uint32_t length;
+    // fvm_data
+    // padding to 128-byte boundary
+} __attribute__((packed));
+
 struct spi_region
 {
     uint8_t type;
@@ -271,10 +288,45 @@ struct smbus_rule
     uint8_t addr;
     uint8_t whitelist[32];
 } __attribute__((packed));
+
+struct fvm_address
+{
+    uint8_t type;
+    uint16_t fvm_type;
+    uint32_t rsvd;
+    uint32_t addr;
+} __attribute__((packed));
+constexpr uint8_t fvm_type_bios = 0;
+constexpr uint8_t fvm_type_me = 1;
+constexpr uint8_t fvm_type_ucode_reg_1 = 2;
+constexpr uint8_t fvm_type_ucode_reg_2 = 3;
+
+struct fvm_capabilities
+{
+    uint8_t type;
+    uint16_t rsvd1;
+    uint8_t revision;
+    uint16_t length;
+    struct
+    {
+        uint8_t major;
+        uint8_t minor;
+        uint8_t release;
+        uint8_t hotfix;
+    } version;
+    uint32_t layout;
+    uint32_t actions;
+    uint8_t rsvd2[26];
+    uint8_t description[20];
+} __attribute__((packed));
+constexpr uint8_t action_reboot_required = 1;
+
 constexpr uint8_t type_spi_region = 1;
 constexpr uint8_t type_smbus_rule = 2;
+constexpr uint8_t type_fvm_address = 3;
+constexpr uint8_t type_fvm_capabilities = 4;
 
-constexpr uint32_t pbc_magic = 0x5f404243;
+constexpr uint32_t pbc_magic = 0x5f504243;
 struct pbc
 {
     uint32_t magic;
@@ -423,6 +475,10 @@ bool pfr_write(mtd<deviceClassT>& dev, const std::string& filename,
                 else if (region->type == type_smbus_rule)
                 {
                     region_offset += sizeof(smbus_rule);
+                }
+                else if (region->type == type_fvm_address)
+                {
+                    region_offset += sizeof(fvm_address);
                 }
                 else
                 {
