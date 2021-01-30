@@ -225,7 +225,8 @@ static bool is_block0_valid(const blk0* b0, const uint8_t* protected_content)
 
     // Verify length of Protected Content (PC) is not larger than allowed
     uint32_t pc_type = b0->pc_type;
-    if (pc_type == pfr_pc_type_cpld_update)
+    if ((pc_type == pfr_pc_type_cpld_update) ||
+        (pc_type == pfr_pc_type_pfr_decommission))
     {
         // The PC length of a CPLD update capsule should not exceed 1MB.
         // A valid signed CPLD update capsule for a larger device may be sent to
@@ -406,6 +407,8 @@ static inline uint32_t get_required_perm(uint32_t pc_type)
             return pfr_perm_sign_bmc_update;
         case pfr_pc_type_cancel_cert:
             return pfr_perm_sign_all;
+        case pfr_pc_type_pfr_decommission:
+            return pfr_perm_sign_cpld_update;
         default:
             return 0;
     }
