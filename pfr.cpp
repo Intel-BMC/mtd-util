@@ -260,6 +260,14 @@ static bool is_block0_valid(const blk0* b0, const uint8_t* protected_content)
             return false;
         }
     }
+    else if (pc_type == pfr_pc_type_afm_update)
+    {
+        if (b0->pc_length > pfr_afm_max_size)
+        {
+            FWERROR("afm image too big");
+            return false;
+        }
+    }
 
     // Check for the 0s in the reserved field
     // This reduces the degree of freedom for attackers
@@ -405,6 +413,8 @@ static inline uint32_t get_required_perm(uint32_t pc_type)
             return pfr_perm_sign_bmc_pfm;
         case pfr_pc_type_bmc_update:
             return pfr_perm_sign_bmc_update;
+        case pfr_pc_type_afm_update:
+            return pfr_perm_sign_afm_update;
         case pfr_pc_type_cancel_cert:
             return pfr_perm_sign_all;
         case pfr_pc_type_pfr_decommission:

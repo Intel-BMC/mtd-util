@@ -42,6 +42,7 @@ constexpr uint32_t pfr_pc_type_pch_pfm = 0x01;
 constexpr uint32_t pfr_pc_type_pch_update = 0x02;
 constexpr uint32_t pfr_pc_type_bmc_pfm = 0x03;
 constexpr uint32_t pfr_pc_type_bmc_update = 0x04;
+constexpr uint32_t pfr_pc_type_afm_update = 0x06;
 constexpr uint32_t pfr_pc_type_cancel_cert = 0x100;
 constexpr uint32_t pfr_pc_type_pfr_decommission = 0x200;
 
@@ -52,11 +53,13 @@ constexpr uint32_t pfr_perm_sign_pch_update = 0x02;
 constexpr uint32_t pfr_perm_sign_bmc_pfm = 0x04;
 constexpr uint32_t pfr_perm_sign_bmc_update = 0x08;
 constexpr uint32_t pfr_perm_sign_cpld_update = 0x10;
+constexpr uint32_t pfr_perm_sign_afm_update = 0x20;
 
 constexpr size_t pfr_blk_size = 0x1000;
 constexpr size_t pfr_cpld_update_size = 1 * 1024 * 1024; // 1 MB
 constexpr size_t pfr_pch_max_size = 24 * 1024 * 1024;    // 24 MB
 constexpr size_t pfr_bmc_max_size = 32 * 1024 * 1024;    // 32 MB
+constexpr size_t pfr_afm_max_size = 128 * 1024;          // 128KB
 constexpr size_t pfr_cancel_cert_size = 8;
 constexpr uint32_t pfr_max_key_id = 127;
 
@@ -215,6 +218,7 @@ struct cancel_payload
 } __attribute__((packed));
 
 constexpr uint32_t pfm_magic = 0x02b3ce1d;
+constexpr uint32_t afm_magic = 0x8883ce1d;
 constexpr size_t pfm_block_size = 128;
 struct pfm
 {
@@ -223,6 +227,18 @@ struct pfm
     uint8_t bkc;
     uint16_t pfm_revision;
     uint32_t rsvd;
+    uint8_t oem_data[16];
+    uint32_t length;
+    // pfm_data
+    // padding to 128-byte boundary
+} __attribute__((packed));
+
+struct afm
+{
+    uint32_t magic;
+    uint8_t svn;
+    uint8_t rsvd;
+    uint16_t afm_revision;
     uint8_t oem_data[16];
     uint32_t length;
     // pfm_data
