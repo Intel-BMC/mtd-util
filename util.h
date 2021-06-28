@@ -91,7 +91,7 @@ static inline uint64_t hash(const std::string& str)
 
     for (auto i : str)
     {
-        ret ^= i;
+        ret ^= static_cast<uint64_t>(i);
         ret *= prime;
     }
 
