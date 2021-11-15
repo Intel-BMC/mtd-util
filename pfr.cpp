@@ -336,7 +336,7 @@ static bool is_block0_valid(const blk0* b0, const uint8_t* protected_content)
     if (!mem_check(b0->sha256, b0->pc_length, 0xff))
     {
         FWWARN("sha256 signature is not empty");
-        return false;
+        // do not enforce until images are generated correctly
     }
     // require the sha384 signature to be correct
     return verify_sha384(b0->sha384, protected_content, b0->pc_length);
@@ -813,7 +813,12 @@ static bool fvm_authenticate(const b0b1_signature* img_sig)
             if (info->hash_info & sha256_present)
             {
                 FWINFO("           spi_region + sha256 not supported");
-                return false;
+                // For now, allow images that are dual hashed to pass
+                // but reject images that are only sha256 hashed
+                if (!(info->hash_info & sha384_present))
+                {
+                    return false;
+                }
             }
             if (info->hash_info & sha384_present)
             {
