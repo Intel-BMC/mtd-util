@@ -106,10 +106,20 @@ int file_mtd_emulation::open(const std::string& path)
         THROW(FileIOError() << boost::errinfo_errno(errno));
     if (sb.st_size == 0)
     {
-        // truncate to a default size
-        if (ftruncate(_fd, DEFAULT_MTD_EMU_SZ) < 0)
-            THROW(FileIOError() << boost::errinfo_errno(errno));
+        // fill the mtd to default size with 0xff
+        int br;
+        std::vector<uint8_t> ffs(erase_size(), 0xff);
+        for (int i = 0; i < DEFAULT_MTD_EMU_SZ / erase_size(); i++)
+        {
+            br = ::write(_fd, ffs.data(), ffs.size());
+            if (br < 0)
+                THROW(FileIOError() << boost::errinfo_errno(errno));
+        }
         _size = DEFAULT_MTD_EMU_SZ;
+
+        // move to the beginning
+        if (lseek(_fd, 0, SEEK_SET) < 0)
+            THROW(FileIOError() << boost::errinfo_errno(errno));
     }
     else
     {
