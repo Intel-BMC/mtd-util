@@ -320,6 +320,14 @@ static bool is_block0_valid(const blk0* b0, const uint8_t* protected_content)
             return false;
         }
     }
+    else if (pc_type == pfr_pc_type_combined_cpld_update)
+    {
+        if (b0->pc_length > pfr_combined_cpld_max_size)
+        {
+            FWERROR("combined image too big");
+            return false;
+        }
+    }
 
     // Check for the 0s in the reserved field
     // This reduces the degree of freedom for attackers
@@ -479,6 +487,9 @@ static inline uint32_t get_required_perm(uint32_t pc_type)
             return pfr_perm_sign_all;
         case pfr_pc_type_pfr_decommission:
             return pfr_perm_sign_cpld_update;
+        case pfr_pc_type_combined_cpld_update:
+            return pfr_perm_sign_combined_cpld_update;
+
         default:
             FWERROR("bad pc_type: " << pc_type);
             return 0;
@@ -746,6 +757,170 @@ static uint32_t read_saved_layout(void)
     return layout;
 }
 
+static bool pfm_cfm_authenticate(const uint8_t* base_addr, bool check_root_key,
+                                 const size_t max_size)
+{
+
+    auto offset =
+        reinterpret_cast<const uint8_t*>(base_addr + blk0blk1_size * 2);
+
+    if (offset < base_addr || offset > (base_addr + max_size))
+    {
+        FWERROR("An invalid pointer reference");
+        return false;
+    }
+    static constexpr const char prod_id_file[] = "/var/cache/private/prodID";
+    uint32_t prod_id;
+    std::ifstream file(prod_id_file);
+
+    if (!file.is_open())
+    {
+        FWERROR("failed to open prodID file");
+        return false;
+    }
+
+    file >> std::hex >> prod_id;
+
+    // Validate PFM
+    auto pfm_str = reinterpret_cast<const pfm*>(offset);
+    if (pfm_str->magic != pfm_magic)
+    {
+        FWERROR("pfm magic number not valid");
+        return false;
+    }
+
+    if (pfm_str->platform_type != prod_id)
+    {
+        FWERROR("product id not valid");
+        return false;
+    }
+
+    offset += pfm_hdr_size;
+
+    // Validate FW Type of CPU/SCM/DEBUG CPLD
+    auto cpu_cpld_addr_str = reinterpret_cast<const cpld_addr_def*>(offset);
+
+    if (cpu_cpld_addr_str->fw_type != CPUfwType)
+    {
+        FWERROR("fwType is not CPU");
+        return false;
+    }
+
+    auto CPU_cpld_strt_offset = cpu_cpld_addr_str->img_strt_offset;
+    offset += CPLD_addr_ref_hdr_size;
+
+    auto scm_cpld_addr_str = reinterpret_cast<const cpld_addr_def*>(offset);
+
+    if (scm_cpld_addr_str->fw_type != SCMfwType)
+    {
+        FWERROR("fwType is not SCM");
+        return false;
+    }
+
+    auto SCM_cpld_strt_offset = scm_cpld_addr_str->img_strt_offset;
+    offset += CPLD_addr_ref_hdr_size;
+
+    auto debug_cpld_addr_str = reinterpret_cast<const cpld_addr_def*>(offset);
+
+    if (debug_cpld_addr_str->fw_type != DebugfwType)
+    {
+        FWERROR("fwType is not Debug");
+        return false;
+    }
+
+    auto DBG_cpld_strt_offset = debug_cpld_addr_str->img_strt_offset;
+
+    // CPU CPLD signature validation
+    offset = reinterpret_cast<const uint8_t*>(base_addr + CPU_cpld_strt_offset);
+
+    auto cpu_img_sig = reinterpret_cast<const b0b1_signature*>(offset);
+
+    if (!is_signature_valid(cpu_img_sig, check_root_key))
+    {
+        FWERROR("CPU CPLD signature is not valid");
+        return false;
+    }
+
+    offset += blk0blk1_size;
+
+    // CPU CPLD CFM validation
+    auto cpu_cfm_str = reinterpret_cast<const cfm*>(offset);
+
+    if (cpu_cfm_str->magic != cfm_magic)
+    {
+        FWERROR("CPU cfm magic is not valid");
+        return false;
+    }
+
+    if (cpu_cfm_str->fw_type != CPUfwType)
+    {
+        FWERROR("fwType is not CPU");
+        return false;
+    }
+
+    // SCM CPLD signature validation
+    offset = reinterpret_cast<const uint8_t*>(base_addr + SCM_cpld_strt_offset);
+    auto scm_img_sig = reinterpret_cast<const b0b1_signature*>(offset);
+
+    if (!is_signature_valid(scm_img_sig, check_root_key))
+    {
+        FWERROR("SCM CPLD signature is not valid");
+        return false;
+    }
+
+    offset += blk0blk1_size;
+
+    // SCM CPLD CFM validation
+    auto scm_cfm_str = reinterpret_cast<const cfm*>(offset);
+
+    if (scm_cfm_str->magic != cfm_magic)
+    {
+        FWERROR("SCM cfm magic is not valid");
+        return false;
+    }
+
+    if (scm_cfm_str->fw_type != SCMfwType)
+    {
+        FWERROR("fwType is not SCM");
+        return false;
+    }
+
+    // Debug CPLD signature validation
+    offset = reinterpret_cast<const uint8_t*>(base_addr + DBG_cpld_strt_offset);
+    auto debug_img_sig = reinterpret_cast<const b0b1_signature*>(offset);
+
+    if (!is_signature_valid(debug_img_sig, check_root_key))
+    {
+        FWERROR("DEBUG CPLD signature is not valid");
+        return false;
+    }
+
+    offset += blk0blk1_size;
+
+    if (offset < base_addr || offset > (base_addr + max_size))
+    {
+        FWERROR("An invalid pointer reference");
+        return false;
+    }
+
+    // Debug CPLD CFM validation
+    auto debug_cfm_str = reinterpret_cast<const cfm*>(offset);
+
+    if (debug_cfm_str->magic != cfm_magic)
+    {
+        FWERROR("Debug cfm magic is not valid");
+        return false;
+    }
+
+    if (debug_cfm_str->fw_type != DebugfwType)
+    {
+        FWERROR("fwType is not Debug");
+        return false;
+    }
+
+    return true;
+}
+
 static bool fvm_authenticate(const b0b1_signature* img_sig)
 {
     // sig (full image signature) has already been authenticated; immediately
@@ -972,10 +1147,28 @@ bool pfr_authenticate(const std::string& filename, bool check_root_key)
 
     if (!is_signature_valid(sig, check_root_key))
     {
+        FWERROR("FVM signature not valid");
         return false;
     }
+
+    if (sig->b0.pc_type == pfr_pc_type_combined_cpld_update)
+    {
+        auto offset = reinterpret_cast<const uint8_t*>(file.const_data());
+        offset += blk0blk1_size;
+
+        const auto pfm_sig = reinterpret_cast<const b0b1_signature*>(offset);
+
+        if (!is_signature_valid(pfm_sig, check_root_key))
+        {
+            FWERROR("PFM signature not valid");
+            return false;
+        }
+
+        return pfm_cfm_authenticate(reinterpret_cast<const uint8_t*>(base_addr),
+                                    check_root_key, file.size());
+    }
     // partial images should have the FVM signature checked as well
-    if (sig->b0.pc_type == pfr_pc_type_partial_update)
+    else if (sig->b0.pc_type == pfr_pc_type_partial_update)
     {
         // check PFM for FVMs to authenticate
         return fvm_authenticate(sig);
