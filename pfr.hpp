@@ -449,6 +449,7 @@ bool pfr_write(mtd<deviceClassT>& dev, const std::string& filename,
     uint32_t wr_count = 1;
     uint32_t er_count = 1;
     uint32_t erase_end_addr = 0;
+    uint32_t write_end_addr = 0;
     for (uint32_t blk = 0; blk < pbc_hdr->bitmap_size; blk += wr_count)
     {
         if ((blk % 8) == 0)
@@ -541,28 +542,37 @@ bool pfr_write(mtd<deviceClassT>& dev, const std::string& filename,
             FWDEBUG("erase(" << std::hex << pfr_blk_size * blk << ", "
                              << pfr_blk_size * er_count + dev_offset << ")");
             dev.erase(pfr_blk_size * blk + dev_offset, pfr_blk_size * er_count);
-            erase_end_addr = (pfr_blk_size * (blk + er_count));
+            erase_end_addr = (pfr_blk_size * (blk + er_count)) - 1;
+            FWDEBUG("erase_end_addr: " << std::hex << erase_end_addr);
         }
 
         if (copy)
         {
             cbspan data(offset, offset + pfr_blk_size * wr_count);
-            // DUMP(PRINT_ERROR, data);
-            FWDEBUG("write(" << std::hex << pfr_blk_size * blk << ", "
-                             << pfr_blk_size * wr_count << "), offset = 0x"
-                             << (offset - map_base) + dev_offset);
+            write_end_addr = (pfr_blk_size * (blk + wr_count)) - 1;
+            FWDEBUG("write_end_addr: " << std::hex << write_end_addr);
+
             // Check if current write address wasn't part of previous 64K sector
             // erase. and erase it here.
-            if (((pfr_blk_size * (blk + wr_count)) >= erase_end_addr) ||
-                ((pfr_blk_size * blk) >= erase_end_addr))
+            if ((write_end_addr > erase_end_addr) ||
+                ((pfr_blk_size * blk) > erase_end_addr))
             {
                 // Currently 4K erases are not working hence making it always
                 // 64K erase.
                 // TODO: Fix 4K erase issue and fix the below logic to do
                 // incremental 4K erases.
-                dev.erase(erase_end_addr + dev_offset, pfr_blk_size * 16);
+                FWDEBUG("erase(" << std::hex
+                                 << (erase_end_addr + 1) + dev_offset << ", "
+                                 << pfr_blk_size * 16 << ")");
+
+                dev.erase((erase_end_addr + 1) + dev_offset, pfr_blk_size * 16);
                 erase_end_addr += pfr_blk_size * 16;
+                FWDEBUG("erase_end_addr: " << std::hex << erase_end_addr);
             }
+            // DUMP(PRINT_ERROR, data);
+            FWDEBUG("write(" << std::hex << pfr_blk_size * blk << ", "
+                             << pfr_blk_size * wr_count << "), offset = 0x"
+                             << (offset - map_base) + dev_offset);
             dev.write_raw(pfr_blk_size * blk + dev_offset, data);
 
             offset += pfr_blk_size * wr_count;
