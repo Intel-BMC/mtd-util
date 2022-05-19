@@ -340,7 +340,7 @@ int main(int argc, char* argv[])
         optind++;
     }
 #ifdef DEVELOPER_OPTIONS
-    if (argv[optind][0] == 'e')
+    else if (argv[optind][0] == 'e')
     {
         int offset = 0;
         action = ACTION_ERASE;
